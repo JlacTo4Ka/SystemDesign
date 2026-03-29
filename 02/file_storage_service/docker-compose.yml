@@ -1,0 +1,16 @@
+services:
+  jwt-auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jwt_auth_service
+    ports:
+      - "8080:8080"
+    environment:
+      JWT_SECRET_KEY: my-secret-key
+    restart: on-failure:5
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
