@@ -1,0 +1,11 @@
+worker-threads: 2
+worker-fs-threads: 2
+logger-level: warning
+
+is-testing: true
+testsuite-enabled: true
+
+server-port: 8080
+
+jwt_secret_key: test-secret-key
+postgres-dsn: postgresql://postgres:postgres@host.docker.internal:5432/file_storage_db

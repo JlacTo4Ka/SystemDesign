@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: jwt_auth_postgres
+    environment:
+      POSTGRES_DB: file_storage_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./sql/data.sql:/docker-entrypoint-initdb.d/02-data.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d file_storage_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  jwt-auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jwt_auth_service
+    ports:
+      - "8080:8080"
+    environment:
+      JWT_SECRET_KEY: my-secret-key
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure:5
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:

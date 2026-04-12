@@ -1,0 +1,10 @@
+worker-threads: 4
+worker-fs-threads: 2
+logger-level: error
+
+is-testing: true
+
+server-port: 8080
+
+jwt_secret_key: CHANGE_ME
+postgres-dsn: postgresql://postgres:postgres@postgres:5432/file_storage_db
