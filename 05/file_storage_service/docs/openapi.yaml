@@ -1,0 +1,712 @@
+openapi: 3.0.3
+info:
+  title: File Storage REST API
+  version: 1.0.0
+  description: |
+    REST API сервис для упрощённого облачного хранилища файлов (по аналогии с Яндекс Диском).
+
+    Сущности системы:
+    - пользователь (user)
+    - папка (folder)
+    - файл (file)
+
+    Основной функционал:
+    - регистрация пользователя
+    - аутентификация пользователя с использованием JWT
+    - создание папок
+    - получение списка всех папок
+    - создание файлов внутри папок
+    - поиск пользователя по логину
+    - поиск пользователей по маске имени и фамилии
+    - получение файла по имени
+    - удаление файла
+    - удаление папки
+
+servers:
+  - url: http://localhost:8080
+    description: local run
+  - url: http://localhost:37279
+    description: testsuite run example
+
+tags:
+  - name: Auth
+  - name: Users
+  - name: Folders
+  - name: Files
+
+paths:
+  /v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: User login
+      description: Authenticates user by login and password and returns JWT token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              default:
+                value:
+                  login: alexey-1
+                  password: "12345"
+      responses:
+        '200':
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                default:
+                  value:
+                    token: <jwt_token>
+                    user_id: 1
+                    login: alexey-1
+        '400':
+          description: Invalid request body or missing fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_fields:
+                  value:
+                    error: login and password are required
+                invalid_json:
+                  value:
+                    error: invalid json body
+        '401':
+          description: Invalid login or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: invalid login or password
+
+  /v1/users:
+    post:
+      tags: [Users]
+      summary: Create new user
+      description: Creates a new user in in-memory storage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+            examples:
+              default:
+                value:
+                  login: alexey-1
+                  password: "12345"
+                  first_name: Alexey
+                  last_name: Pavlo
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+              example:
+                id: 1
+                login: alexey-1
+                first_name: Alexey
+                last_name: Pavlo
+        '400':
+          description: Invalid request body or missing fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_fields:
+                  value:
+                    error: login, password, first_name and last_name are required
+                invalid_json:
+                  value:
+                    error: invalid json body
+        '409':
+          description: User with this login already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: user with this login already exists
+
+  /v1/users/by-login/{login}:
+    get:
+      tags: [Users]
+      summary: Get user by login
+      description: Returns user by exact login.
+      parameters:
+        - name: login
+          in: path
+          required: true
+          description: User login
+          schema:
+            type: string
+            example: alexey-1
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+              example:
+                id: 1
+                login: alexey-1
+                first_name: Alexey
+                last_name: Pavlo
+        '400':
+          description: Login path parameter is empty
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: login is required
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: user not found
+
+  /v1/users/search:
+    get:
+      tags: [Users]
+      summary: Search users by mask
+      description: |
+        Searches users by mask in first name or last name.
+        Current implementation returns an array, including empty array if nothing matched.
+      parameters:
+        - name: mask
+          in: query
+          required: false
+          description: Substring for search in first_name or last_name
+          schema:
+            type: string
+            example: ivan
+      responses:
+        '200':
+          description: Search completed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserResponse'
+              examples:
+                found:
+                  value:
+                    - id: 1
+                      login: ivan-aaa-test
+                      first_name: Ivan
+                      last_name: Petrov
+                    - id: 2
+                      login: sergey-bbb-test
+                      first_name: Sergey
+                      last_name: Ivanov
+                empty:
+                  value: []
+
+  /v1/folders:
+    post:
+      tags: [Folders]
+      summary: Create folder
+      description: Creates a new folder. Endpoint requires JWT token.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFolderRequest'
+            example:
+              name: docs
+              owner_user_id: 1
+      responses:
+        '201':
+          description: Folder created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderResponse'
+              example:
+                id: 1
+                name: docs
+                owner_user_id: 1
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_json:
+                  value:
+                    error: invalid json body
+                missing_fields:
+                  value:
+                    error: name and owner_user_id are required
+        '401':
+          description: Unauthorized, token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_header:
+                  value:
+                    error: Missing Authorization header
+                invalid_type:
+                  value:
+                    error: Invalid authorization type
+                invalid_token:
+                  value:
+                    error: Token verification failed
+        '404':
+          description: Owner user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: owner user not found
+
+    get:
+      tags: [Folders]
+      summary: Get all folders
+      description: Returns all folders from in-memory storage.
+      responses:
+        '200':
+          description: List of folders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FolderResponse'
+              examples:
+                filled:
+                  value:
+                    - id: 1
+                      name: docs
+                      owner_user_id: 1
+                    - id: 2
+                      name: photos
+                      owner_user_id: 2
+                empty:
+                  value: []
+
+  /v1/folders/{folder_id}:
+    delete:
+      tags: [Folders]
+      summary: Delete folder
+      description: Deletes folder by id. Endpoint requires JWT token.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: folder_id
+          in: path
+          required: true
+          description: Folder identifier
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Folder deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              example:
+                status: folder deleted
+        '400':
+          description: Invalid folder id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                empty_id:
+                  value:
+                    error: folder_id is required
+                invalid_id:
+                  value:
+                    error: folder_id must be integer
+        '401':
+          description: Unauthorized, token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Missing Authorization header
+        '404':
+          description: Folder not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: folder not found
+
+  /v1/folders/{folder_id}/files:
+    post:
+      tags: [Files]
+      summary: Create file in folder
+      description: Creates file inside a folder. Endpoint requires JWT token.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: folder_id
+          in: path
+          required: true
+          description: Folder identifier
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFileRequest'
+            example:
+              name: test-file.txt
+              content: hello world
+              owner_user_id: 1
+      responses:
+        '201':
+          description: File created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileResponse'
+              example:
+                id: 1
+                folder_id: 1
+                owner_user_id: 1
+                name: test-file.txt
+                content: hello world
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_folder_id:
+                  value:
+                    error: folder_id is required
+                invalid_folder_id:
+                  value:
+                    error: folder_id must be integer
+                invalid_json:
+                  value:
+                    error: invalid json body
+                missing_fields:
+                  value:
+                    error: name and owner_user_id are required
+        '401':
+          description: Unauthorized, token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Missing Authorization header
+        '404':
+          description: Folder or owner user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                folder_not_found:
+                  value:
+                    error: folder not found
+                owner_not_found:
+                  value:
+                    error: owner user not found
+
+  /v1/files/by-name/{name}:
+    get:
+      tags: [Files]
+      summary: Get file by name
+      description: Returns file by exact file name.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: File name
+          schema:
+            type: string
+            example: test-file.txt
+      responses:
+        '200':
+          description: File found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileResponse'
+              example:
+                id: 1
+                folder_id: 1
+                owner_user_id: 1
+                name: test-file.txt
+                content: hello world
+        '400':
+          description: Missing name parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: name is required
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: file not found
+
+  /v1/files/{file_id}:
+    delete:
+      tags: [Files]
+      summary: Delete file
+      description: Deletes file by id. Endpoint requires JWT token.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          description: File identifier
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: File deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              example:
+                status: file deleted
+        '400':
+          description: Invalid file id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                empty_id:
+                  value:
+                    error: file_id is required
+                invalid_id:
+                  value:
+                    error: file_id must be integer
+        '401':
+          description: Unauthorized, token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Missing Authorization header
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: file not found
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token from POST /v1/auth/login.
+        Use Authorization header in format: Bearer <token>
+
+  schemas:
+    CreateUserRequest:
+      type: object
+      required:
+        - login
+        - password
+        - first_name
+        - last_name
+      properties:
+        login:
+          type: string
+          example: alexey-1
+        password:
+          type: string
+          example: "12345"
+        first_name:
+          type: string
+          example: Alexey
+        last_name:
+          type: string
+          example: Pavlo
+
+    UserResponse:
+      type: object
+      required:
+        - id
+        - login
+        - first_name
+        - last_name
+      properties:
+        id:
+          type: integer
+          example: 1
+        login:
+          type: string
+          example: alexey-1
+        first_name:
+          type: string
+          example: Alexey
+        last_name:
+          type: string
+          example: Pavlo
+
+    LoginRequest:
+      type: object
+      required:
+        - login
+        - password
+      properties:
+        login:
+          type: string
+          example: alexey-1
+        password:
+          type: string
+          example: "12345"
+
+    LoginResponse:
+      type: object
+      required:
+        - token
+        - user_id
+        - login
+      properties:
+        token:
+          type: string
+          example: <jwt_token>
+        user_id:
+          type: integer
+          example: 1
+        login:
+          type: string
+          example: alexey-1
+
+    CreateFolderRequest:
+      type: object
+      required:
+        - name
+        - owner_user_id
+      properties:
+        name:
+          type: string
+          example: docs
+        owner_user_id:
+          type: integer
+          example: 1
+
+    FolderResponse:
+      type: object
+      required:
+        - id
+        - name
+        - owner_user_id
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: docs
+        owner_user_id:
+          type: integer
+          example: 1
+
+    CreateFileRequest:
+      type: object
+      required:
+        - name
+        - content
+        - owner_user_id
+      properties:
+        name:
+          type: string
+          example: test-file.txt
+        content:
+          type: string
+          example: hello world
+        owner_user_id:
+          type: integer
+          example: 1
+
+    FileResponse:
+      type: object
+      required:
+        - id
+        - folder_id
+        - owner_user_id
+        - name
+        - content
+      properties:
+        id:
+          type: integer
+          example: 1
+        folder_id:
+          type: integer
+          example: 1
+        owner_user_id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: test-file.txt
+        content:
+          type: string
+          example: hello world
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: file not found
+
+    StatusResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          example: file deleted
